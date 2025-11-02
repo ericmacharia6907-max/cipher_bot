@@ -7,7 +7,7 @@ app = Flask(__name__)
 app.secret_key = 'cipher-secret-key-change-this-in-production'  # Change this!
 
 # ADD YOUR HUGGING FACE API KEY HERE
-HUGGING_FACE_API_KEY = "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"# Replace with your actual key from huggingface.co
+HUGGING_FACE_API_KEY = "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"# Replace with your actual key from huggingface.co
 
 # Store user data in a simple JSON file
 DATA_FILE = 'user_data.json'
