@@ -127,24 +127,27 @@ Important guidelines:
         try:
             system_prompt = self.build_system_prompt()
             
-            # Build messages with recent history
-            messages = [
-                {"role": "system", "content": system_prompt}
-            ]
+            # Build full prompt with context
+            conversation_context = ""
             
-            # Add recent conversation history (last 4 messages for context)
+            # Add recent conversation history
             for msg in self.conversation_history[-4:]:
-                messages.append(msg)
+                role = msg['role']
+                content = msg['content']
+                if role == 'user':
+                    conversation_context += f"User: {content}\n"
+                else:
+                    conversation_context += f"Cipher: {content}\n"
             
-            # Add current message
-            messages.append({"role": "user", "content": message})
+            # Build complete prompt
+            full_prompt = f"{system_prompt}\n\n{conversation_context}User: {message}\nCipher:"
             
-            # Try multiple models in order of preference
+            # Try multiple models
             models = [
-                "meta-llama/Meta-Llama-3-8B-Instruct",
                 "mistralai/Mistral-7B-Instruct-v0.3",
-                "HuggingFaceH4/zephyr-7b-beta",
-                "microsoft/Phi-3-mini-4k-instruct"
+                "meta-llama/Meta-Llama-3-8B-Instruct",
+                "microsoft/Phi-3-mini-4k-instruct",
+                "HuggingFaceH4/zephyr-7b-beta"
             ]
             
             last_error = None
@@ -152,14 +155,24 @@ Important guidelines:
             for model in models:
                 try:
                     print(f"🔄 Trying model: {model}")
-                    response = self.client.chat_completion(
-                        messages=messages,
+                    
+                    # Use text_generation instead of chat_completion
+                    response = self.client.text_generation(
+                        prompt=full_prompt,
                         model=model,
-                        max_tokens=500,
-                        temperature=0.8
+                        max_new_tokens=300,
+                        temperature=0.7,
+                        repetition_penalty=1.1,
+                        return_full_text=False
                     )
                     
-                    ai_response = response.choices[0].message.content.strip()
+                    ai_response = response.strip()
+                    
+                    # Clean up response (remove any "User:" or "Cipher:" that might appear)
+                    if "User:" in ai_response:
+                        ai_response = ai_response.split("User:")[0].strip()
+                    if "Cipher:" in ai_response:
+                        ai_response = ai_response.replace("Cipher:", "").strip()
                     
                     print(f"✅ Success with model: {model}")
                     
