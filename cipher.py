@@ -4,10 +4,16 @@ import os
 from bot_logic import CipherBot
 
 app = Flask(__name__)
-app.secret_key = 'cipher-secret-key-change-this-in-production'  # Change this!
+app.secret_key = os.environ.get('SECRET_KEY', 'cipher-secret-key-change-this-in-production')
 
-# ADD YOUR HUGGING FACE API KEY HERE
-HUGGING_FACE_API_KEY = "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"# Replace with your actual key from huggingface.co
+# Get API key from environment variable (works for both local and deployed)
+HUGGING_FACE_API_KEY = os.environ.get('HUGGING_FACE_API_KEY', None)
+
+# Print for debugging (remove in production)
+if HUGGING_FACE_API_KEY:
+    print(f"✅ API Key loaded: {HUGGING_FACE_API_KEY[:10]}...")
+else:
+    print("⚠️  No API key found - using basic responses")
 
 # Store user data in a simple JSON file
 DATA_FILE = 'user_data.json'

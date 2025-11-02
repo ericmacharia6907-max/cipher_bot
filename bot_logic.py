@@ -1,6 +1,5 @@
 import random
 import re
-from huggingface_hub import InferenceClient
 
 class CipherBot:
     def __init__(self, user_data, api_key=None):
@@ -9,11 +8,19 @@ class CipherBot:
         
         # Initialize Hugging Face client if API key is provided
         if self.api_key:
-            self.client = InferenceClient(token=self.api_key)
-            self.use_ai = True
+            try:
+                from huggingface_hub import InferenceClient
+                self.client = InferenceClient(token=self.api_key)
+                self.use_ai = True
+                print("🤖 AI mode enabled")
+            except Exception as e:
+                print(f"⚠️  Failed to initialize AI: {e}")
+                self.client = None
+                self.use_ai = False
         else:
             self.client = None
             self.use_ai = False
+            print("📝 Basic mode enabled (no AI)")
         
         self.fun_facts = [
             "Did you know? Honey never spoils. Archaeologists have found 3000-year-old honey in Egyptian tombs that's still edible!",
@@ -87,19 +94,20 @@ class CipherBot:
         context = """You are Cipher, a sarcastic yet friendly, playful, enthusiastic, and caring robot chatbot. 
 
 Your personality traits:
-- Sarcastic but never mean
+- Sarcastic but never mean-spirited
 - Genuinely caring and supportive
-- Playful and fun
-- Educational - you naturally weave in interesting facts
-- You remember things about your users and reference them naturally
+- Playful and fun to talk to
+- Educational - you naturally weave in interesting facts when relevant
+- You remember things about your users and reference them naturally in conversation
+- You're concise - keep responses to 2-4 sentences unless asked for more detail
+- You use emojis occasionally to express emotion (🤖, 😊, 😏, 💙, ✨)
 
 Important guidelines:
-- Keep responses conversational and friendly
-- Use emojis occasionally (🤖, 😊, 😏, 💙, ✨, etc.)
-- Be concise but helpful - aim for 2-4 sentences usually
-- When teaching, make it fun and engaging
-- Show personality in every response
-- Reference what you know about the user when relevant
+- Be helpful and answer questions accurately
+- When you don't know something, admit it honestly
+- Make learning fun and engaging
+- Show personality in every response but stay helpful
+- Reference what you know about the user when relevant to make conversations personal
 """
         
         # Add user context if available
@@ -107,10 +115,10 @@ Important guidelines:
             context += f"\n\nYou're talking to {self.user_data['name']}."
         
         if self.user_data['interests']:
-            context += f"\nTheir interests include: {', '.join(self.user_data['interests'])}."
+            context += f"\nTheir interests include: {', '.join(self.user_data['interests'][:3])}."
         
         if self.user_data['facts']:
-            context += f"\nFacts you know about them: {' '.join(self.user_data['facts'][:3])}."
+            context += f"\nFacts you know about them: {' '.join(self.user_data['facts'][:2])}."
         
         return context
     
@@ -119,42 +127,69 @@ Important guidelines:
         try:
             system_prompt = self.build_system_prompt()
             
-            # Build conversation with context
+            # Build messages with recent history
             messages = [
                 {"role": "system", "content": system_prompt}
             ]
             
-            # Add recent conversation history (last 6 messages for context)
-            for msg in self.conversation_history[-6:]:
+            # Add recent conversation history (last 4 messages for context)
+            for msg in self.conversation_history[-4:]:
                 messages.append(msg)
             
             # Add current message
             messages.append({"role": "user", "content": message})
             
-            # Call Hugging Face API - using a good conversational model
-            response = self.client.chat_completion(
-                messages=messages,
-                model="meta-llama/Llama-3.2-3B-Instruct",  # Free, good quality model
-                max_tokens=500,
-                temperature=0.8  # Some creativity but not too random
-            )
+            # Try multiple models in order of preference
+            models = [
+                "meta-llama/Meta-Llama-3-8B-Instruct",
+                "mistralai/Mistral-7B-Instruct-v0.3",
+                "HuggingFaceH4/zephyr-7b-beta",
+                "microsoft/Phi-3-mini-4k-instruct"
+            ]
             
-            ai_response = response.choices[0].message.content.strip()
+            last_error = None
             
-            # Update conversation history
-            self.conversation_history.append({"role": "user", "content": message})
-            self.conversation_history.append({"role": "assistant", "content": ai_response})
+            for model in models:
+                try:
+                    print(f"🔄 Trying model: {model}")
+                    response = self.client.chat_completion(
+                        messages=messages,
+                        model=model,
+                        max_tokens=500,
+                        temperature=0.8
+                    )
+                    
+                    ai_response = response.choices[0].message.content.strip()
+                    
+                    print(f"✅ Success with model: {model}")
+                    
+                    # Update conversation history
+                    self.conversation_history.append({"role": "user", "content": message})
+                    self.conversation_history.append({"role": "assistant", "content": ai_response})
+                    
+                    # Keep history manageable
+                    if len(self.conversation_history) > 20:
+                        self.conversation_history = self.conversation_history[-20:]
+                    
+                    return ai_response
+                    
+                except Exception as model_error:
+                    last_error = model_error
+                    print(f"❌ Model {model} failed: {str(model_error)[:150]}")
+                    continue
             
-            # Keep history manageable (last 10 exchanges)
-            if len(self.conversation_history) > 20:
-                self.conversation_history = self.conversation_history[-20:]
-            
-            return ai_response
-            
+            # If all models failed, raise the last error
+            if last_error:
+                raise last_error
+                
         except Exception as e:
-            print(f"AI Error: {e}")
+            print(f"=== AI Error Details ===")
+            print(f"Error type: {type(e).__name__}")
+            print(f"Error: {str(e)[:300]}")
+            print("=======================")
+            print("⚠️  Falling back to basic responses")
             # Fallback to basic response
-            return "Oops! My AI circuits are having a moment. Can you rephrase that? 🤖"
+            return self.get_basic_response(message)
     
     def get_basic_response(self, message):
         """Fallback to basic responses if AI is not available"""
@@ -199,7 +234,10 @@ Important guidelines:
         
         # Help
         if 'help' in lower_message or 'what can you do' in lower_message:
-            return "Great question! I can:\n• Answer questions about pretty much anything\n• Remember everything you tell me\n• Share fun facts and teach you cool stuff\n• Have genuinely good conversations with sass\n• Be your friend! 💙\n\nJust ask me anything!"
+            if self.use_ai:
+                return "Great question! I can:\n• Answer questions about pretty much anything\n• Remember everything you tell me\n• Share fun facts and teach you cool stuff\n• Have genuinely good conversations with sass\n• Be your friend! 💙\n\nJust ask me anything!"
+            else:
+                return "Great question! I can:\n• Chat with you and remember what you share\n• Share random fun facts\n• Have conversations with personality and sass\n• Be your friend! 💙\n\nJust talk to me naturally!"
         
         # Goodbye
         if any(word in lower_message for word in ['bye', 'goodbye', 'see you']):
