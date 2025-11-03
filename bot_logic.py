@@ -6,19 +6,20 @@ class CipherBot:
         self.user_data = user_data
         self.api_key = api_key
         
-        # Initialize Hugging Face client if API key is provided
+        # Initialize Gemini if API key is provided
         if self.api_key:
             try:
-                from huggingface_hub import InferenceClient
-                self.client = InferenceClient(token=self.api_key)
+                import google.generativeai as genai
+                genai.configure(api_key=self.api_key)
+                self.model = genai.GenerativeModel('gemini-pro')
                 self.use_ai = True
-                print("🤖 AI mode enabled")
+                print("🤖 AI mode enabled (Gemini)")
             except Exception as e:
                 print(f"⚠️  Failed to initialize AI: {e}")
-                self.client = None
+                self.model = None
                 self.use_ai = False
         else:
-            self.client = None
+            self.model = None
             self.use_ai = False
             print("📝 Basic mode enabled (no AI)")
         
@@ -108,6 +109,7 @@ Important guidelines:
 - Make learning fun and engaging
 - Show personality in every response but stay helpful
 - Reference what you know about the user when relevant to make conversations personal
+- Stay in character as Cipher the robot
 """
         
         # Add user context if available
@@ -123,15 +125,13 @@ Important guidelines:
         return context
     
     def get_ai_response(self, message):
-        """Get response from Hugging Face AI"""
+        """Get response from Gemini AI"""
         try:
             system_prompt = self.build_system_prompt()
             
-            # Build full prompt with context
+            # Build conversation context
             conversation_context = ""
-            
-            # Add recent conversation history
-            for msg in self.conversation_history[-4:]:
+            for msg in self.conversation_history[-6:]:
                 role = msg['role']
                 content = msg['content']
                 if role == 'user':
@@ -139,69 +139,33 @@ Important guidelines:
                 else:
                     conversation_context += f"Cipher: {content}\n"
             
-            # Build complete prompt
-            full_prompt = f"{system_prompt}\n\n{conversation_context}User: {message}\nCipher:"
+            # Build full prompt
+            full_prompt = f"{system_prompt}\n\nConversation history:\n{conversation_context}\nUser: {message}\n\nRespond as Cipher:"
             
-            # Try multiple models
-            models = [
-                "mistralai/Mistral-7B-Instruct-v0.3",
-                "meta-llama/Meta-Llama-3-8B-Instruct",
-                "microsoft/Phi-3-mini-4k-instruct",
-                "HuggingFaceH4/zephyr-7b-beta"
-            ]
+            print(f"🔄 Asking Gemini...")
             
-            last_error = None
+            # Get response from Gemini
+            response = self.model.generate_content(full_prompt)
+            ai_response = response.text.strip()
             
-            for model in models:
-                try:
-                    print(f"🔄 Trying model: {model}")
-                    
-                    # Use text_generation instead of chat_completion
-                    response = self.client.text_generation(
-                        prompt=full_prompt,
-                        model=model,
-                        max_new_tokens=300,
-                        temperature=0.7,
-                        repetition_penalty=1.1,
-                        return_full_text=False
-                    )
-                    
-                    ai_response = response.strip()
-                    
-                    # Clean up response (remove any "User:" or "Cipher:" that might appear)
-                    if "User:" in ai_response:
-                        ai_response = ai_response.split("User:")[0].strip()
-                    if "Cipher:" in ai_response:
-                        ai_response = ai_response.replace("Cipher:", "").strip()
-                    
-                    print(f"✅ Success with model: {model}")
-                    
-                    # Update conversation history
-                    self.conversation_history.append({"role": "user", "content": message})
-                    self.conversation_history.append({"role": "assistant", "content": ai_response})
-                    
-                    # Keep history manageable
-                    if len(self.conversation_history) > 20:
-                        self.conversation_history = self.conversation_history[-20:]
-                    
-                    return ai_response
-                    
-                except Exception as model_error:
-                    last_error = model_error
-                    print(f"❌ Model {model} failed: {str(model_error)[:150]}")
-                    continue
+            print(f"✅ Gemini response received")
             
-            # If all models failed, raise the last error
-            if last_error:
-                raise last_error
-                
+            # Update conversation history
+            self.conversation_history.append({"role": "user", "content": message})
+            self.conversation_history.append({"role": "assistant", "content": ai_response})
+            
+            # Keep history manageable
+            if len(self.conversation_history) > 20:
+                self.conversation_history = self.conversation_history[-20:]
+            
+            return ai_response
+            
         except Exception as e:
             print(f"=== AI Error Details ===")
             print(f"Error type: {type(e).__name__}")
             print(f"Error: {str(e)[:300]}")
             print("=======================")
             print("⚠️  Falling back to basic responses")
-            # Fallback to basic response
             return self.get_basic_response(message)
     
     def get_basic_response(self, message):

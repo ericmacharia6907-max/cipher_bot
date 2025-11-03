@@ -7,11 +7,11 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'cipher-secret-key-change-this-in-production')
 
 # Get API key from environment variable (works for both local and deployed)
-HUGGING_FACE_API_KEY = os.environ.get('HUGGING_FACE_API_KEY', None)
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', None)
 
 # Print for debugging (remove in production)
-if HUGGING_FACE_API_KEY:
-    print(f"✅ API Key loaded: {HUGGING_FACE_API_KEY[:10]}...")
+if GEMINI_API_KEY:
+    print(f"✅ Gemini API Key loaded: {GEMINI_API_KEY[:10]}...")
 else:
     print("⚠️  No API key found - using basic responses")
 
@@ -66,7 +66,7 @@ def chat():
         })
         
         # Get bot response with AI
-        bot = CipherBot(user_data, HUGGING_FACE_API_KEY)
+        bot = CipherBot(user_data, GEMINI_API_KEY)
         response, updated_data = bot.get_response(user_message)
         
         # Save updated data
@@ -102,7 +102,7 @@ def init():
         })
         
         # Get greeting with AI
-        bot = CipherBot(user_data, HUGGING_FACE_API_KEY)
+        bot = CipherBot(user_data, GEMINI_API_KEY)
         greeting = bot.get_greeting()
         
         return jsonify({
