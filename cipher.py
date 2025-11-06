@@ -2,12 +2,23 @@ from flask import Flask, render_template, request, jsonify, session
 import json
 import os
 from bot_logic import CipherBot
+from flask import Flask, render_template, request, jsonify, session
+import json
+import os
+from bot_logic import CipherBot
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+app = Flask(__name__)
+# ... rest of the code stays the same
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'cipher-secret-key-change-this-in-production')
 
 # Get API key from environment variable (works for both local and deployed)
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', None)
+GEMINI_API_KEY = "AIzaSyAEyj55rR97xayNW9nEzaIAUSpfWWfl7yQ"
 
 # Print for debugging (remove in production)
 if GEMINI_API_KEY:

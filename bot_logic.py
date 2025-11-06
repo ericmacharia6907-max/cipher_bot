@@ -6,20 +6,11 @@ class CipherBot:
         self.user_data = user_data
         self.api_key = api_key
         
-        # Initialize Gemini if API key is provided
+        # Check if API key is provided
         if self.api_key:
-            try:
-                import google.generativeai as genai
-                genai.configure(api_key=self.api_key)
-                self.model = genai.GenerativeModel('gemini-pro')
-                self.use_ai = True
-                print("🤖 AI mode enabled (Gemini)")
-            except Exception as e:
-                print(f"⚠️  Failed to initialize AI: {e}")
-                self.model = None
-                self.use_ai = False
+            self.use_ai = True
+            print("🤖 AI mode enabled (Gemini REST API)")
         else:
-            self.model = None
             self.use_ai = False
             print("📝 Basic mode enabled (no AI)")
         
@@ -125,8 +116,10 @@ Important guidelines:
         return context
     
     def get_ai_response(self, message):
-        """Get response from Gemini AI"""
+        """Get response from Gemini AI using REST API"""
         try:
+            import requests
+            
             system_prompt = self.build_system_prompt()
             
             # Build conversation context
@@ -142,13 +135,34 @@ Important guidelines:
             # Build full prompt
             full_prompt = f"{system_prompt}\n\nConversation history:\n{conversation_context}\nUser: {message}\n\nRespond as Cipher:"
             
-            print(f"🔄 Asking Gemini...")
+            print(f"🔄 Asking Gemini via REST API...")
             
-            # Get response from Gemini
-            response = self.model.generate_content(full_prompt)
-            ai_response = response.text.strip()
+            # Use Gemini REST API
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={self.api_key}"
             
-            print(f"✅ Gemini response received")
+            headers = {'Content-Type': 'application/json'}
+            data = {
+                "contents": [{
+                    "parts": [{"text": full_prompt}]
+                }],
+                "generationConfig": {
+                    "temperature": 0.8,
+                    "maxOutputTokens": 500
+                }
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=30)
+            response.raise_for_status()
+            
+            result = response.json()
+            
+            # Extract the response text
+            if 'candidates' in result and len(result['candidates']) > 0:
+                ai_response = result['candidates'][0]['content']['parts'][0]['text'].strip()
+            else:
+                raise Exception("No response from Gemini")
+            
+            print(f"✅ Gemini response received via REST API")
             
             # Update conversation history
             self.conversation_history.append({"role": "user", "content": message})
